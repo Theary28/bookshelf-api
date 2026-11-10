@@ -1,0 +1,40 @@
+# Secrets come from the local .env file (gitignored), never from this file.
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: ${DB_DATABASE}
+    ports:
+      # Set API_PORT=3001 if 3000 is busy (e.g. my-task is running).
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    # Published on 5434 so it can run next to the my-task database (5433).
+    ports:
+      - "5434:5432"
+    volumes:
+      - bookshelf-pgdata:/var/lib/postgresql/data
+      # Creates bookshelf_test on first start, for npm run test:e2e.
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bookshelf-pgdata:
